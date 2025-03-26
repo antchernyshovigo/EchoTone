@@ -1,0 +1,14 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Данные
+storage/audio/*
+!storage/audio/.gitkeep
+storage/coreml_models/*
+!storage/coreml_models/.gitkeep
+
+# VS Code
+.vscode/
+.DS_Store
