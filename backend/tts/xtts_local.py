@@ -15,6 +15,7 @@ def generate_russian_voice_clone(
     speaker_wav: Path,
     output_wav: Path,
     language: str = "ru",
+    progress_callback=None,
 ):
     """
     Generate Russian speech with a local XTTS-v2 installation.
@@ -42,21 +43,31 @@ def generate_russian_voice_clone(
     if not speaker_wav.exists():
         raise TtsEngineError("Voice sample file was not saved.")
 
+    notify(progress_callback, "Preparing voice sample", 20)
     speaker_wav = ensure_supported_speaker_sample(speaker_wav)
+    notify(progress_callback, "Preparing XTTS checkpoint", 35)
     allow_xtts_checkpoint_globals()
 
     output_wav.parent.mkdir(parents=True, exist_ok=True)
 
+    notify(progress_callback, "Loading XTTS model", 45)
     model = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+    notify(progress_callback, "Synthesizing Russian narration", 70)
     model.tts_to_file(
         text=text,
         speaker_wav=str(speaker_wav),
         language=language,
         file_path=str(output_wav),
     )
+    notify(progress_callback, "Finalizing audio file", 95)
 
     if not output_wav.exists():
         raise TtsEngineError("XTTS finished without creating an output file.")
+
+
+def notify(progress_callback, message: str, progress: int):
+    if progress_callback:
+        progress_callback(message, progress)
 
 
 def ensure_supported_speaker_sample(speaker_path: Path):
