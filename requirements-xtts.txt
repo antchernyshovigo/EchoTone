@@ -1,3 +1,4 @@
 TTS
 transformers==4.33.3
 numpy<2
+torchcodec
