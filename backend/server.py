@@ -22,6 +22,8 @@ UPLOADS_DIR = DATA_DIR / "uploads"
 OUTPUTS_DIR = DATA_DIR / "outputs"
 CACHE_DIR = DATA_DIR / "cache"
 JOBS_DIR = DATA_DIR / "jobs"
+VOICES_DIR = DATA_DIR / "voices"
+VOICES_MANIFEST = VOICES_DIR / "manifest.json"
 MAX_UPLOAD_BYTES = 80 * 1024 * 1024
 
 os.environ.setdefault("MPLCONFIGDIR", str(CACHE_DIR / "matplotlib"))
@@ -39,53 +41,49 @@ class EchoToneHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/jobs/"):
             return self.serve_job_status()
 
+        if self.path == "/api/voices":
+            return self.serve_voices()
+
         return super().do_GET()
 
     def do_POST(self):
         if self.path == "/api/generate":
             return self.handle_generate()
 
+        if self.path == "/api/voices":
+            return self.handle_create_voice()
+
+        self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+
+    def do_DELETE(self):
+        if self.path.startswith("/api/voices/"):
+            return self.handle_delete_voice()
+
         self.send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
 
     def handle_generate(self):
-        try:
-            content_length = int(self.headers.get("Content-Length", "0"))
-        except ValueError:
-            return self.send_json({"error": "Invalid Content-Length"}, HTTPStatus.BAD_REQUEST)
-
-        if content_length <= 0:
-            return self.send_json({"error": "Request body is empty"}, HTTPStatus.BAD_REQUEST)
-
-        if content_length > MAX_UPLOAD_BYTES:
-            return self.send_json({"error": "Upload is too large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
-
-        content_type = self.headers.get("Content-Type", "")
-        if "multipart/form-data" not in content_type:
-            return self.send_json({"error": "Expected multipart/form-data"}, HTTPStatus.BAD_REQUEST)
-
-        body = self.rfile.read(content_length)
-        fields = parse_multipart(content_type, body)
+        fields = self.read_multipart_fields()
+        if isinstance(fields, tuple):
+            return self.send_json(fields[0], fields[1])
 
         text = fields.get("text", {}).get("text", "").strip()
         voice = fields.get("voice")
+        voice_id = fields.get("voiceId", {}).get("text", "").strip()
         language = fields.get("language", {}).get("text", "ru").strip() or "ru"
 
         if not text:
             return self.send_json({"error": "Text is required"}, HTTPStatus.BAD_REQUEST)
 
-        if not voice or not voice.get("content"):
-            return self.send_json({"error": "Voice sample is required"}, HTTPStatus.BAD_REQUEST)
-
         job_id = uuid.uuid4().hex
         UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
-        voice_ext = extension_for_upload(voice.get("filename"), voice.get("content_type"))
-        voice_path = UPLOADS_DIR / f"{job_id}{voice_ext}"
+        voice_path = resolve_generation_voice(job_id, voice_id, voice)
+        if isinstance(voice_path, tuple):
+            return self.send_json(voice_path[0], voice_path[1])
+
         text_path = UPLOADS_DIR / f"{job_id}.txt"
         output_path = OUTPUTS_DIR / f"{job_id}.wav"
-
-        voice_path.write_bytes(voice["content"])
         text_path.write_text(text, encoding="utf-8")
 
         estimate = estimate_duration(text)
@@ -126,6 +124,80 @@ class EchoToneHandler(SimpleHTTPRequestHandler):
             HTTPStatus.ACCEPTED,
         )
         return
+
+    def read_multipart_fields(self):
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return {"error": "Invalid Content-Length"}, HTTPStatus.BAD_REQUEST
+
+        if content_length <= 0:
+            return {"error": "Request body is empty"}, HTTPStatus.BAD_REQUEST
+
+        if content_length > MAX_UPLOAD_BYTES:
+            return {"error": "Upload is too large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            return {"error": "Expected multipart/form-data"}, HTTPStatus.BAD_REQUEST
+
+        body = self.rfile.read(content_length)
+        return parse_multipart(content_type, body)
+
+    def handle_create_voice(self):
+        fields = self.read_multipart_fields()
+        if isinstance(fields, tuple):
+            return self.send_json(fields[0], fields[1])
+
+        name = fields.get("name", {}).get("text", "").strip()
+        voice = fields.get("voice")
+        language = fields.get("language", {}).get("text", "ru").strip() or "ru"
+
+        if not name:
+            return self.send_json({"error": "Voice name is required"}, HTTPStatus.BAD_REQUEST)
+
+        if not voice or not voice.get("content"):
+            return self.send_json({"error": "Voice sample is required"}, HTTPStatus.BAD_REQUEST)
+
+        voice_id = uuid.uuid4().hex
+        VOICES_DIR.mkdir(parents=True, exist_ok=True)
+        voice_ext = extension_for_upload(voice.get("filename"), voice.get("content_type"))
+        voice_path = VOICES_DIR / f"{voice_id}{voice_ext}"
+        voice_path.write_bytes(voice["content"])
+
+        manifest = load_voice_manifest()
+        record = {
+            "id": voice_id,
+            "name": name,
+            "filename": voice_path.name,
+            "language": language,
+            "contentType": voice.get("content_type") or "application/octet-stream",
+            "createdAt": time.time(),
+        }
+        manifest["voices"].append(record)
+        save_voice_manifest(manifest)
+        self.send_json(record, HTTPStatus.CREATED)
+
+    def handle_delete_voice(self):
+        voice_id = Path(self.path.removeprefix("/api/voices/")).name
+        if not voice_id:
+            return self.send_json({"error": "Voice profile id is required"}, HTTPStatus.BAD_REQUEST)
+
+        manifest = load_voice_manifest()
+        record = next((item for item in manifest["voices"] if item.get("id") == voice_id), None)
+        if not record:
+            return self.send_json({"error": "Voice profile not found"}, HTTPStatus.NOT_FOUND)
+
+        manifest["voices"] = [item for item in manifest["voices"] if item.get("id") != voice_id]
+        voice_path = VOICES_DIR / Path(record.get("filename", "")).name
+        if voice_path.exists():
+            voice_path.unlink()
+
+        save_voice_manifest(manifest)
+        self.send_json({"deleted": voice_id})
+
+    def serve_voices(self):
+        self.send_json(load_voice_manifest())
 
     def serve_job_status(self):
         job_id = Path(self.path.removeprefix("/api/jobs/")).name
@@ -200,6 +272,50 @@ def extension_for_upload(filename: str | None, content_type: str | None):
             return suffix
 
     return mimetypes.guess_extension(content_type or "") or ".webm"
+
+
+def load_voice_manifest():
+    if not VOICES_MANIFEST.exists():
+        return {"voices": []}
+
+    try:
+        data = json.loads(VOICES_MANIFEST.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"voices": []}
+
+    if not isinstance(data.get("voices"), list):
+        data["voices"] = []
+
+    return data
+
+
+def save_voice_manifest(manifest: dict):
+    VOICES_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = VOICES_DIR / "manifest.tmp"
+    tmp_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(VOICES_MANIFEST)
+
+
+def resolve_generation_voice(job_id: str, voice_id: str, voice: dict | None):
+    if voice_id:
+        manifest = load_voice_manifest()
+        record = next((item for item in manifest["voices"] if item.get("id") == voice_id), None)
+        if not record:
+            return {"error": "Voice profile not found"}, HTTPStatus.NOT_FOUND
+
+        voice_path = VOICES_DIR / Path(record.get("filename", "")).name
+        if not voice_path.exists():
+            return {"error": "Voice profile audio file is missing"}, HTTPStatus.NOT_FOUND
+
+        return voice_path
+
+    if not voice or not voice.get("content"):
+        return {"error": "Voice sample or voice profile is required"}, HTTPStatus.BAD_REQUEST
+
+    voice_ext = extension_for_upload(voice.get("filename"), voice.get("content_type"))
+    voice_path = UPLOADS_DIR / f"{job_id}{voice_ext}"
+    voice_path.write_bytes(voice["content"])
+    return voice_path
 
 
 def estimate_duration(text: str):
