@@ -3,6 +3,10 @@ const deleteVoiceButton = document.querySelector("#deleteVoiceButton");
 const modeInputs = document.querySelectorAll("input[name='narrationMode']");
 const modeState = document.querySelector("#modeState");
 const modeHint = document.querySelector("#modeHint");
+const voiceLibrary = document.querySelector("#voiceLibrary");
+const voiceName = document.querySelector("#voiceName");
+const saveVoiceButton = document.querySelector("#saveVoiceButton");
+const deleteSavedVoiceButton = document.querySelector("#deleteSavedVoiceButton");
 const voiceUpload = document.querySelector("#voiceUpload");
 const voicePreview = document.querySelector("#voicePreview");
 const voiceState = document.querySelector("#voiceState");
@@ -27,6 +31,8 @@ let isRecording = false;
 let voiceObjectUrl;
 let voiceBlob;
 let voiceFilename = "voice-sample.webm";
+let selectedVoiceId = "";
+let savedVoices = [];
 let narrationMode = "system";
 let activeJobPoll;
 
@@ -42,11 +48,14 @@ function setPill(element, label, className = "") {
 
 function updateGenerateState() {
   const needsVoice = narrationMode === "clone";
-  generateButton.disabled = !(hasText && (!needsVoice || hasVoice));
+  const voiceReady = hasVoice || Boolean(selectedVoiceId);
+  generateButton.disabled = !(hasText && (!needsVoice || voiceReady));
+  saveVoiceButton.disabled = !voiceBlob || !voiceName.value.trim();
+  deleteSavedVoiceButton.disabled = !selectedVoiceId;
 
   if (!hasText) {
     setStatus("Add book text");
-  } else if (needsVoice && !hasVoice) {
+  } else if (needsVoice && !voiceReady) {
     setStatus("Add a voice sample");
   } else {
     setStatus("Ready to narrate", true);
@@ -73,6 +82,8 @@ function loadVoiceBlob(blob, label) {
   const url = URL.createObjectURL(blob);
   voiceObjectUrl = url;
   voiceBlob = blob;
+  selectedVoiceId = "";
+  voiceLibrary.value = "";
   voicePreview.src = url;
   voicePreview.hidden = false;
   hasVoice = true;
@@ -100,6 +111,8 @@ function deleteVoiceSample() {
   voiceUpload.value = "";
   voiceBlob = undefined;
   voiceFilename = "voice-sample.webm";
+  selectedVoiceId = "";
+  voiceLibrary.value = "";
   hasVoice = false;
   deleteVoiceButton.hidden = true;
   setPill(voiceState, "Missing");
@@ -108,6 +121,122 @@ function deleteVoiceSample() {
   progressFill.style.width = "0%";
   resultBox.innerHTML = "<p>No narration started yet.</p>";
   stopJobPolling();
+  updateGenerateState();
+}
+
+async function loadVoiceLibrary() {
+  try {
+    const response = await fetch("/api/voices");
+    const payload = await response.json();
+    savedVoices = Array.isArray(payload.voices) ? payload.voices : [];
+    renderVoiceLibrary();
+  } catch (error) {
+    savedVoices = [];
+    renderVoiceLibrary();
+  }
+}
+
+function renderVoiceLibrary() {
+  voiceLibrary.innerHTML = '<option value="">Current sample</option>';
+  for (const voice of savedVoices) {
+    const option = document.createElement("option");
+    option.value = voice.id;
+    option.textContent = voice.name;
+    voiceLibrary.appendChild(option);
+  }
+
+  voiceLibrary.value = selectedVoiceId;
+}
+
+async function saveCurrentVoice() {
+  if (!voiceBlob || !voiceName.value.trim()) {
+    updateGenerateState();
+    return;
+  }
+
+  saveVoiceButton.disabled = true;
+  const formData = new FormData();
+  formData.append("name", voiceName.value.trim());
+  formData.append("language", "ru");
+  formData.append("voice", voiceBlob, voiceFilename);
+
+  try {
+    const response = await fetch("/api/voices", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Could not save voice");
+    }
+
+    selectedVoiceId = payload.id;
+    hasVoice = true;
+    setPill(voiceState, "Saved", "good");
+    voiceMeta.textContent = `${payload.name} saved to local voice library.`;
+    voiceName.value = "";
+    await loadVoiceLibrary();
+    updateGenerateState();
+  } catch (error) {
+    setStatus(error.message);
+  } finally {
+    updateGenerateState();
+  }
+}
+
+async function deleteSavedVoice() {
+  if (!selectedVoiceId) {
+    updateGenerateState();
+    return;
+  }
+
+  deleteSavedVoiceButton.disabled = true;
+  const deletedId = selectedVoiceId;
+
+  try {
+    const response = await fetch(`/api/voices/${deletedId}`, {
+      method: "DELETE",
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Could not delete voice");
+    }
+
+    selectedVoiceId = "";
+    voiceLibrary.value = "";
+    hasVoice = Boolean(voiceBlob);
+    setPill(voiceState, hasVoice ? "Loaded" : "Missing", hasVoice ? "good" : "");
+    voiceMeta.textContent = hasVoice
+      ? "Current voice sample selected."
+      : "Use 30-90 seconds of clean speech for best results later.";
+    await loadVoiceLibrary();
+  } catch (error) {
+    setStatus(error.message);
+  } finally {
+    updateGenerateState();
+  }
+}
+
+function selectSavedVoice() {
+  selectedVoiceId = voiceLibrary.value;
+  if (!selectedVoiceId) {
+    hasVoice = Boolean(voiceBlob);
+    setPill(voiceState, hasVoice ? "Loaded" : "Missing", hasVoice ? "good" : "");
+    voiceMeta.textContent = hasVoice
+      ? "Current voice sample selected."
+      : "Use 30-90 seconds of clean speech for best results later.";
+    updateGenerateState();
+    return;
+  }
+
+  const selected = savedVoices.find((voice) => voice.id === selectedVoiceId);
+  hasVoice = true;
+  setPill(voiceState, "Library", "good");
+  voiceMeta.textContent = selected
+    ? `${selected.name} selected from local voice library.`
+    : "Saved voice selected from local library.";
   updateGenerateState();
 }
 
@@ -181,6 +310,10 @@ voiceUpload.addEventListener("change", () => {
 });
 
 deleteVoiceButton.addEventListener("click", deleteVoiceSample);
+saveVoiceButton.addEventListener("click", saveCurrentVoice);
+deleteSavedVoiceButton.addEventListener("click", deleteSavedVoice);
+voiceName.addEventListener("input", updateGenerateState);
+voiceLibrary.addEventListener("change", selectSavedVoice);
 
 modeInputs.forEach((input) => {
   input.addEventListener("change", () => setNarrationMode(input.value));
@@ -204,7 +337,7 @@ generateButton.addEventListener("click", async () => {
     return;
   }
 
-  if (!voiceBlob || !bookText.value.trim()) {
+  if ((!voiceBlob && !selectedVoiceId) || !bookText.value.trim()) {
     updateGenerateState();
     return;
   }
@@ -218,7 +351,11 @@ generateButton.addEventListener("click", async () => {
   const formData = new FormData();
   formData.append("language", "ru");
   formData.append("text", bookText.value.trim());
-  formData.append("voice", voiceBlob, voiceFilename);
+  if (selectedVoiceId) {
+    formData.append("voiceId", selectedVoiceId);
+  } else {
+    formData.append("voice", voiceBlob, voiceFilename);
+  }
 
   try {
     const response = await fetch("/api/generate", {
@@ -237,7 +374,7 @@ generateButton.addEventListener("click", async () => {
     setPill(jobState, "Needs setup");
     setStatus("Local XTTS setup required");
     resultBox.innerHTML = `<p>${error.message}</p>`;
-    generateButton.disabled = !(hasVoice && hasText);
+    generateButton.disabled = !((hasVoice || selectedVoiceId) && hasText);
   }
 });
 
@@ -271,7 +408,7 @@ function pollGenerationJob(jobId, estimateSeconds = 60) {
           <audio class="audio-player" controls src="${payload.audioUrl}"></audio>
           <p><a href="${payload.audioUrl}" download>Download generated WAV</a></p>
         `;
-        generateButton.disabled = !(hasVoice && hasText);
+        generateButton.disabled = !((hasVoice || selectedVoiceId) && hasText);
         return;
       }
 
@@ -284,7 +421,7 @@ function pollGenerationJob(jobId, estimateSeconds = 60) {
       setPill(jobState, "Error");
       setStatus("Local XTTS failed");
       resultBox.innerHTML = `<p>${error.message}</p>`;
-      generateButton.disabled = !(hasVoice && hasText);
+      generateButton.disabled = !((hasVoice || selectedVoiceId) && hasText);
     }
   }
 
@@ -339,3 +476,4 @@ function playWithSystemVoice() {
 
 updateTextMetrics();
 setNarrationMode("system");
+loadVoiceLibrary();
