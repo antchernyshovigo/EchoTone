@@ -14,7 +14,7 @@ The first useful version should let a user:
 
 ## MVP Scope
 
-This repository currently starts with a browser-only prototype. It does not clone a voice yet. The first prototype focuses on the core product flow and uses the browser's built-in speech synthesis only as a placeholder preview.
+This repository currently starts with a local-first prototype for Russian audiobook narration. The frontend records or uploads a voice sample and sends it with Russian text to a local Python backend. The backend is prepared for XTTS-v2 voice cloning.
 
 ### Phase 1: Prototype
 
@@ -23,19 +23,19 @@ This repository currently starts with a browser-only prototype. It does not clon
 - Text upload from `.txt` files.
 - Manual paste/edit text area.
 - Basic estimated reading time.
-- Mock generation state and audio preview placeholder.
+- Local backend generation request.
 
-### Phase 2: Backend
+### Phase 2: Local Backend
 
-- User accounts and private storage.
-- Secure upload API for voice samples and source text.
-- Background narration jobs.
-- Job progress and status history.
-- Audio output storage and downloads.
+- Local Python HTTP server.
+- Local upload handling for voice samples and source text.
+- XTTS-v2 adapter for Russian voice cloning.
+- Local WAV output storage and downloads.
+- Clear setup error when XTTS is not installed yet.
 
 ### Phase 3: Voice Cloning Integration
 
-- Pick a TTS provider or self-hosted model.
+- Install and cache XTTS-v2 locally.
 - Add explicit user consent for voice cloning.
 - Validate audio quality before training/generation.
 - Split long books into chunks.
@@ -51,27 +51,41 @@ This repository currently starts with a browser-only prototype. It does not clon
 
 ## Local Usage
 
-Open `index.html` in a browser.
-
-For microphone recording, some browsers require a local server. From this folder, run:
+Run the local EchoTone server:
 
 ```bash
-python3 -m http.server 8080
+python3 backend/server.py 8081
 ```
 
 Then open:
 
 ```text
-http://localhost:8080
+http://127.0.0.1:8081
 ```
+
+The UI can record a voice sample and send Russian text to the backend. If XTTS is not installed yet, generation will return a setup message instead of falling back to a fake/system voice.
+
+## Optional XTTS Setup
+
+XTTS-v2 is not vendored into this repo because the model runtime and weights are large. Install it locally when you are ready to generate cloned Russian audio:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install TTS
+python3 backend/server.py 8081
+```
+
+XTTS/PyTorch compatibility is usually better on Python 3.10 or 3.11 than on the newest Python versions. The first successful XTTS generation may download model weights into your local model cache. After that, the cached model can be used offline.
+
+For best XTTS results, upload a clean `.wav` voice sample. The browser recorder may produce `.webm`; that is useful for testing the app flow, but local XTTS may require conversion before generation.
 
 ## Technical Direction
 
-The current prototype is dependency-free HTML, CSS, and JavaScript. A practical production stack would be:
+The current prototype is dependency-light HTML, CSS, JavaScript, and Python standard library backend code. A practical local stack is:
 
-- Frontend: React or Next.js.
-- Backend: Node.js or Python FastAPI.
-- Storage: S3-compatible object storage.
-- Database: Postgres.
-- Jobs: Redis queue or managed background workers.
-- TTS: external voice cloning provider first, self-hosted model later if needed.
+- Frontend: browser HTML/CSS/JavaScript.
+- Backend: Python local server.
+- Storage: local `data/uploads` and `data/outputs`.
+- TTS: local XTTS-v2 adapter configured for Russian `ru`.
+- Later: background queue for long books and chunk stitching.
