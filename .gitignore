@@ -9,6 +9,7 @@ data/uploads/
 data/outputs/
 data/cache/
 data/jobs/
+data/voices/
 models/
 storage/audio/*
 !storage/audio/.gitkeep
