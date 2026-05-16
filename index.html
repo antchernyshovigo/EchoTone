@@ -66,6 +66,14 @@
             </div>
 
             <audio class="audio-player" id="voicePreview" controls hidden></audio>
+            <div class="voice-library">
+              <select id="voiceLibrary" aria-label="Saved voices">
+                <option value="">Current sample</option>
+              </select>
+              <button class="button danger" id="deleteSavedVoiceButton" type="button" disabled>Delete</button>
+              <input id="voiceName" type="text" placeholder="Voice name">
+              <button class="button secondary" id="saveVoiceButton" type="button" disabled>Save</button>
+            </div>
             <p class="helper" id="voiceMeta">Use 30-90 seconds of clean speech for best results later.</p>
           </div>
         </div>
