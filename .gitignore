@@ -1,14 +1,18 @@
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 
-# Данные
+# Local EchoTone runtime data
+data/uploads/
+data/outputs/
+models/
 storage/audio/*
 !storage/audio/.gitkeep
 storage/coreml_models/*
 !storage/coreml_models/.gitkeep
 
-# VS Code
+# Editors and OS files
 .vscode/
 .DS_Store
