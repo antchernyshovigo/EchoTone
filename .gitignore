@@ -8,6 +8,7 @@ __pycache__/
 data/uploads/
 data/outputs/
 data/cache/
+data/jobs/
 models/
 storage/audio/*
 !storage/audio/.gitkeep
