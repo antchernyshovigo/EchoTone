@@ -43,6 +43,7 @@ def generate_russian_voice_clone(
         raise TtsEngineError("Voice sample file was not saved.")
 
     speaker_wav = ensure_supported_speaker_sample(speaker_wav)
+    allow_xtts_checkpoint_globals()
 
     output_wav.parent.mkdir(parents=True, exist_ok=True)
 
@@ -91,3 +92,25 @@ def ensure_supported_speaker_sample(speaker_path: Path):
         raise TtsEngineError(f"Could not convert browser recording to WAV: {result.stderr.strip()}")
 
     return converted_path
+
+
+def allow_xtts_checkpoint_globals():
+    try:
+        import torch
+        from TTS.config.shared_configs import BaseDatasetConfig
+        from TTS.tts.configs.xtts_config import XttsAudioConfig, XttsConfig
+        from TTS.tts.models.xtts import XttsArgs
+    except ImportError as error:
+        raise TtsEngineError(f"Could not prepare XTTS checkpoint loading: {error}") from error
+
+    if not hasattr(torch.serialization, "add_safe_globals"):
+        return
+
+    torch.serialization.add_safe_globals(
+        [
+            XttsConfig,
+            XttsAudioConfig,
+            XttsArgs,
+            BaseDatasetConfig,
+        ]
+    )
