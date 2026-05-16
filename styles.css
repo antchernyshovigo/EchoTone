@@ -199,6 +199,17 @@ h2 {
   color: var(--ink);
 }
 
+.danger {
+  border-color: #e0b4aa;
+  background: #fff7f5;
+  color: #9f341f;
+}
+
+.danger:hover:not(:disabled) {
+  border-color: #c96953;
+  background: #ffe9e4;
+}
+
 .wide {
   width: 100%;
 }
