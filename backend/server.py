@@ -4,6 +4,8 @@ import json
 import mimetypes
 import os
 import sys
+import threading
+import time
 import uuid
 from email.parser import BytesParser
 from email.policy import default
@@ -19,6 +21,7 @@ DATA_DIR = ROOT / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 OUTPUTS_DIR = DATA_DIR / "outputs"
 CACHE_DIR = DATA_DIR / "cache"
+JOBS_DIR = DATA_DIR / "jobs"
 MAX_UPLOAD_BYTES = 80 * 1024 * 1024
 
 os.environ.setdefault("MPLCONFIGDIR", str(CACHE_DIR / "matplotlib"))
@@ -32,6 +35,9 @@ class EchoToneHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/outputs/"):
             return self.serve_output()
+
+        if self.path.startswith("/api/jobs/"):
+            return self.serve_job_status()
 
         return super().do_GET()
 
@@ -82,40 +88,52 @@ class EchoToneHandler(SimpleHTTPRequestHandler):
         voice_path.write_bytes(voice["content"])
         text_path.write_text(text, encoding="utf-8")
 
-        try:
-            generate_russian_voice_clone(
-                text=text,
-                speaker_wav=voice_path,
-                output_wav=output_path,
-                language=language,
-            )
-        except TtsEngineError as error:
-            return self.send_json(
-                {
-                    "error": str(error),
-                    "engine": "xtts_local",
-                    "jobId": job_id,
-                },
-                HTTPStatus.NOT_IMPLEMENTED,
-            )
-        except Exception as error:  # noqa: BLE001
-            return self.send_json(
-                {
-                    "error": f"Local generation failed: {error}",
-                    "engine": "xtts_local",
-                    "jobId": job_id,
-                },
-                HTTPStatus.INTERNAL_SERVER_ERROR,
-            )
+        estimate = estimate_duration(text)
+        write_job_status(
+            job_id,
+            {
+                "state": "queued",
+                "message": "Queued local XTTS generation",
+                "progress": 5,
+                "startedAt": time.time(),
+                "estimateSeconds": estimate,
+            },
+        )
+
+        thread = threading.Thread(
+            target=run_generation_job,
+            kwargs={
+                "job_id": job_id,
+                "text": text,
+                "voice_path": voice_path,
+                "output_path": output_path,
+                "language": language,
+                "estimate_seconds": estimate,
+            },
+            daemon=True,
+        )
+        thread.start()
 
         self.send_json(
             {
                 "jobId": job_id,
-                "audioUrl": f"/outputs/{output_path.name}",
+                "state": "queued",
+                "statusUrl": f"/api/jobs/{job_id}",
+                "estimateSeconds": estimate,
                 "engine": "xtts_local",
                 "language": language,
-            }
+            },
+            HTTPStatus.ACCEPTED,
         )
+        return
+
+    def serve_job_status(self):
+        job_id = Path(self.path.removeprefix("/api/jobs/")).name
+        status_path = JOBS_DIR / f"{job_id}.json"
+        if not status_path.exists():
+            return self.send_json({"error": "Job not found"}, HTTPStatus.NOT_FOUND)
+
+        self.send_json(json.loads(status_path.read_text(encoding="utf-8")))
 
     def serve_output(self):
         filename = Path(self.path.removeprefix("/outputs/")).name
@@ -182,6 +200,90 @@ def extension_for_upload(filename: str | None, content_type: str | None):
             return suffix
 
     return mimetypes.guess_extension(content_type or "") or ".webm"
+
+
+def estimate_duration(text: str):
+    words = len(text.split())
+    # First local XTTS calls have model warm-up overhead. Keep the estimate honest, not pretty.
+    return max(45, min(900, int(words * 1.6 + 35)))
+
+
+def write_job_status(job_id: str, payload: dict):
+    JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = JOBS_DIR / f"{job_id}.tmp"
+    status_path = JOBS_DIR / f"{job_id}.json"
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    tmp_path.replace(status_path)
+
+
+def update_job_status(job_id: str, **changes):
+    status_path = JOBS_DIR / f"{job_id}.json"
+    current = {}
+    if status_path.exists():
+        current = json.loads(status_path.read_text(encoding="utf-8"))
+
+    current.update(changes)
+    current["updatedAt"] = time.time()
+    write_job_status(job_id, current)
+
+
+def run_generation_job(
+    *,
+    job_id: str,
+    text: str,
+    voice_path: Path,
+    output_path: Path,
+    language: str,
+    estimate_seconds: int,
+):
+    try:
+        update_job_status(
+            job_id,
+            state="running",
+            message="Preparing voice sample and loading XTTS",
+            progress=15,
+            estimateSeconds=estimate_seconds,
+        )
+
+        generate_russian_voice_clone(
+            text=text,
+            speaker_wav=voice_path,
+            output_wav=output_path,
+            language=language,
+            progress_callback=lambda message, progress: update_job_status(
+                job_id,
+                state="running",
+                message=message,
+                progress=progress,
+                estimateSeconds=estimate_seconds,
+            ),
+        )
+
+        update_job_status(
+            job_id,
+            state="done",
+            message="Audio ready",
+            progress=100,
+            audioUrl=f"/outputs/{output_path.name}",
+            engine="xtts_local",
+            language=language,
+        )
+    except TtsEngineError as error:
+        update_job_status(
+            job_id,
+            state="error",
+            message=str(error),
+            progress=0,
+            engine="xtts_local",
+        )
+    except Exception as error:  # noqa: BLE001
+        update_job_status(
+            job_id,
+            state="error",
+            message=f"Local generation failed: {error}",
+            progress=0,
+            engine="xtts_local",
+        )
 
 
 def main():
