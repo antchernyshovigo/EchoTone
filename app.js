@@ -22,6 +22,8 @@ let hasVoice = false;
 let hasText = false;
 let isRecording = false;
 let voiceObjectUrl;
+let voiceBlob;
+let voiceFilename = "voice-sample.webm";
 
 function setStatus(message, ready = false) {
   statusText.textContent = message;
@@ -63,6 +65,7 @@ function loadVoiceBlob(blob, label) {
 
   const url = URL.createObjectURL(blob);
   voiceObjectUrl = url;
+  voiceBlob = blob;
   voicePreview.src = url;
   voicePreview.hidden = false;
   hasVoice = true;
@@ -88,13 +91,15 @@ function deleteVoiceSample() {
   voicePreview.load();
   voicePreview.hidden = true;
   voiceUpload.value = "";
+  voiceBlob = undefined;
+  voiceFilename = "voice-sample.webm";
   hasVoice = false;
   deleteVoiceButton.hidden = true;
   setPill(voiceState, "Missing");
   voiceMeta.textContent = "Use 30-90 seconds of clean speech for best results later.";
   setPill(jobState, "Idle");
   progressFill.style.width = "0%";
-  resultBox.innerHTML = "<p>No audio generated yet.</p>";
+  resultBox.innerHTML = "<p>No local audio generated yet.</p>";
   updateGenerateState();
 }
 
@@ -116,6 +121,7 @@ async function startRecording() {
 
   recorder.addEventListener("stop", () => {
     stream.getTracks().forEach((track) => track.stop());
+    voiceFilename = "voice-sample.webm";
     loadVoiceBlob(new Blob(chunks, { type: "audio/webm" }), "Recorded voice sample.");
   });
 
@@ -151,6 +157,7 @@ voiceUpload.addEventListener("change", () => {
     return;
   }
 
+  voiceFilename = file.name || "voice-sample.webm";
   loadVoiceBlob(file, `${file.name} selected.`);
 });
 
@@ -168,33 +175,49 @@ textUpload.addEventListener("change", async () => {
 
 bookText.addEventListener("input", updateTextMetrics);
 
-generateButton.addEventListener("click", () => {
-  let progress = 0;
+generateButton.addEventListener("click", async () => {
+  if (!voiceBlob || !bookText.value.trim()) {
+    updateGenerateState();
+    return;
+  }
+
   setPill(jobState, "Running", "busy");
-  setStatus("Generating preview");
-  resultBox.innerHTML = "<p>Preparing narration preview...</p>";
+  setStatus("Generating locally with XTTS");
+  resultBox.innerHTML = "<p>Sending text and voice sample to the local XTTS backend...</p>";
   generateButton.disabled = true;
-  progressFill.style.width = "0%";
+  progressFill.style.width = "35%";
 
-  const timer = setInterval(() => {
-    progress += 20;
-    progressFill.style.width = `${progress}%`;
+  const formData = new FormData();
+  formData.append("language", "ru");
+  formData.append("text", bookText.value.trim());
+  formData.append("voice", voiceBlob, voiceFilename);
 
-    if (progress >= 100) {
-      clearInterval(timer);
-      setPill(jobState, "Done", "good");
-      setStatus("Preview ready", true);
-      resultBox.innerHTML = "<p>Prototype preview is ready. Real voice cloning will be connected through the backend in the next phase.</p>";
-      generateButton.disabled = false;
+  try {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = await response.json();
 
-      if ("speechSynthesis" in window) {
-        const sample = bookText.value.trim().slice(0, 260);
-        const utterance = new SpeechSynthesisUtterance(sample);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
-      }
+    if (!response.ok) {
+      throw new Error(payload.error || "Local generation failed");
     }
-  }, 350);
+
+    progressFill.style.width = "100%";
+    setPill(jobState, "Done", "good");
+    setStatus("Russian audio ready", true);
+    resultBox.innerHTML = `
+      <audio class="audio-player" controls src="${payload.audioUrl}"></audio>
+      <p><a href="${payload.audioUrl}" download>Download generated WAV</a></p>
+    `;
+  } catch (error) {
+    progressFill.style.width = "0%";
+    setPill(jobState, "Needs setup");
+    setStatus("Local XTTS setup required");
+    resultBox.innerHTML = `<p>${error.message}</p>`;
+  } finally {
+    generateButton.disabled = !(hasVoice && hasText);
+  }
 });
 
 updateTextMetrics();
