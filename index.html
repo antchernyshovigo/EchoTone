@@ -13,7 +13,7 @@
           <p class="eyebrow">Voice audiobook studio</p>
           <h1 id="page-title">EchoTone</h1>
           <p class="intro">
-            Upload a Russian voice sample and book text, then generate local narration.
+            Read Russian text with a system voice now, or switch to local voice cloning.
           </p>
         </div>
         <div class="status-panel" aria-live="polite">
@@ -23,6 +23,29 @@
       </section>
 
       <section class="workspace" aria-label="EchoTone workflow">
+        <div class="panel mode-panel">
+          <div class="panel-header">
+            <div>
+              <p class="step-label">Mode</p>
+              <h2>Narration voice</h2>
+            </div>
+            <span class="pill good" id="modeState">System</span>
+          </div>
+
+          <div class="segmented" role="radiogroup" aria-label="Narration mode">
+            <label>
+              <input type="radio" name="narrationMode" value="system" checked>
+              <span>System voice</span>
+            </label>
+            <label>
+              <input type="radio" name="narrationMode" value="clone">
+              <span>My voice</span>
+            </label>
+          </div>
+
+          <p class="helper" id="modeHint">System voice runs in the browser and does not need a voice sample.</p>
+        </div>
+
         <div class="panel">
           <div class="panel-header">
             <div>
@@ -83,7 +106,7 @@
           </div>
 
           <button class="button primary wide" id="generateButton" type="button" disabled>
-            Generate Russian audio
+            Play narration
           </button>
 
           <div class="progress-track" aria-hidden="true">
@@ -91,7 +114,7 @@
           </div>
 
           <div class="result" id="resultBox">
-            <p>No local audio generated yet.</p>
+            <p>No narration started yet.</p>
           </div>
         </div>
       </section>
