@@ -1,5 +1,8 @@
 const recordButton = document.querySelector("#recordButton");
 const deleteVoiceButton = document.querySelector("#deleteVoiceButton");
+const modeInputs = document.querySelectorAll("input[name='narrationMode']");
+const modeState = document.querySelector("#modeState");
+const modeHint = document.querySelector("#modeHint");
 const voiceUpload = document.querySelector("#voiceUpload");
 const voicePreview = document.querySelector("#voicePreview");
 const voiceState = document.querySelector("#voiceState");
@@ -24,6 +27,7 @@ let isRecording = false;
 let voiceObjectUrl;
 let voiceBlob;
 let voiceFilename = "voice-sample.webm";
+let narrationMode = "system";
 
 function setStatus(message, ready = false) {
   statusText.textContent = message;
@@ -36,13 +40,15 @@ function setPill(element, label, className = "") {
 }
 
 function updateGenerateState() {
-  generateButton.disabled = !(hasVoice && hasText);
-  if (hasVoice && hasText) {
-    setStatus("Ready to generate", true);
-  } else if (!hasVoice) {
+  const needsVoice = narrationMode === "clone";
+  generateButton.disabled = !(hasText && (!needsVoice || hasVoice));
+
+  if (!hasText) {
+    setStatus("Add book text");
+  } else if (needsVoice && !hasVoice) {
     setStatus("Add a voice sample");
   } else {
-    setStatus("Add book text");
+    setStatus("Ready to narrate", true);
   }
 }
 
@@ -99,7 +105,18 @@ function deleteVoiceSample() {
   voiceMeta.textContent = "Use 30-90 seconds of clean speech for best results later.";
   setPill(jobState, "Idle");
   progressFill.style.width = "0%";
-  resultBox.innerHTML = "<p>No local audio generated yet.</p>";
+  resultBox.innerHTML = "<p>No narration started yet.</p>";
+  updateGenerateState();
+}
+
+function setNarrationMode(mode) {
+  narrationMode = mode;
+  const isSystem = narrationMode === "system";
+  setPill(modeState, isSystem ? "System" : "My voice", isSystem ? "good" : "busy");
+  modeHint.textContent = isSystem
+    ? "System voice runs in the browser and does not need a voice sample."
+    : "My voice uses the local XTTS backend and needs a recorded or uploaded sample.";
+  generateButton.textContent = isSystem ? "Play narration" : "Generate Russian audio";
   updateGenerateState();
 }
 
@@ -163,6 +180,10 @@ voiceUpload.addEventListener("change", () => {
 
 deleteVoiceButton.addEventListener("click", deleteVoiceSample);
 
+modeInputs.forEach((input) => {
+  input.addEventListener("change", () => setNarrationMode(input.value));
+});
+
 textUpload.addEventListener("change", async () => {
   const file = textUpload.files?.[0];
   if (!file) {
@@ -176,6 +197,11 @@ textUpload.addEventListener("change", async () => {
 bookText.addEventListener("input", updateTextMetrics);
 
 generateButton.addEventListener("click", async () => {
+  if (narrationMode === "system") {
+    playWithSystemVoice();
+    return;
+  }
+
   if (!voiceBlob || !bookText.value.trim()) {
     updateGenerateState();
     return;
@@ -220,4 +246,33 @@ generateButton.addEventListener("click", async () => {
   }
 });
 
+function playWithSystemVoice() {
+  const text = bookText.value.trim();
+  if (!text || !("speechSynthesis" in window)) {
+    setStatus("System voice is not available");
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  setPill(jobState, "Playing", "busy");
+  setStatus("Playing system voice", true);
+  progressFill.style.width = "100%";
+  resultBox.innerHTML = "<p>System voice playback is running in the browser.</p>";
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ru-RU";
+  utterance.rate = 1;
+  utterance.onend = () => {
+    setPill(jobState, "Done", "good");
+    setStatus("System narration finished", true);
+  };
+  utterance.onerror = () => {
+    setPill(jobState, "Error");
+    setStatus("System voice failed");
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
 updateTextMetrics();
+setNarrationMode("system");
