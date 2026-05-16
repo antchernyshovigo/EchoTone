@@ -23,52 +23,54 @@
       </section>
 
       <section class="workspace" aria-label="EchoTone workflow">
-        <div class="panel mode-panel">
-          <div class="panel-header">
-            <div>
-              <p class="step-label">Mode</p>
-              <h2>Narration voice</h2>
+        <div class="panel setup-panel">
+          <div class="compact-block">
+            <div class="panel-header">
+              <div>
+                <p class="step-label">Mode</p>
+                <h2>Narration voice</h2>
+              </div>
+              <span class="pill good" id="modeState">System</span>
             </div>
-            <span class="pill good" id="modeState">System</span>
+
+            <div class="segmented" role="radiogroup" aria-label="Narration mode">
+              <label>
+                <input type="radio" name="narrationMode" value="system" checked>
+                <span>System voice</span>
+              </label>
+              <label>
+                <input type="radio" name="narrationMode" value="clone">
+                <span>My voice</span>
+              </label>
+            </div>
+
+            <p class="helper" id="modeHint">System voice runs in the browser and does not need a voice sample.</p>
           </div>
 
-          <div class="segmented" role="radiogroup" aria-label="Narration mode">
-            <label>
-              <input type="radio" name="narrationMode" value="system" checked>
-              <span>System voice</span>
-            </label>
-            <label>
-              <input type="radio" name="narrationMode" value="clone">
-              <span>My voice</span>
-            </label>
-          </div>
+          <div class="compact-block">
+            <div class="panel-header">
+              <div>
+                <p class="step-label">Step 1</p>
+                <h2>Voice sample</h2>
+              </div>
+              <span class="pill" id="voiceState">Missing</span>
+            </div>
 
-          <p class="helper" id="modeHint">System voice runs in the browser and does not need a voice sample.</p>
+            <div class="controls">
+              <button class="button primary" id="recordButton" type="button">Start recording</button>
+              <label class="button secondary file-button">
+                Upload audio
+                <input id="voiceUpload" type="file" accept="audio/*">
+              </label>
+              <button class="button danger" id="deleteVoiceButton" type="button" hidden>Delete sample</button>
+            </div>
+
+            <audio class="audio-player" id="voicePreview" controls hidden></audio>
+            <p class="helper" id="voiceMeta">Use 30-90 seconds of clean speech for best results later.</p>
+          </div>
         </div>
 
-        <div class="panel">
-          <div class="panel-header">
-            <div>
-              <p class="step-label">Step 1</p>
-              <h2>Voice sample</h2>
-            </div>
-            <span class="pill" id="voiceState">Missing</span>
-          </div>
-
-          <div class="controls">
-            <button class="button primary" id="recordButton" type="button">Start recording</button>
-            <label class="button secondary file-button">
-              Upload audio
-              <input id="voiceUpload" type="file" accept="audio/*">
-            </label>
-            <button class="button danger" id="deleteVoiceButton" type="button" hidden>Delete sample</button>
-          </div>
-
-          <audio class="audio-player" id="voicePreview" controls hidden></audio>
-          <p class="helper" id="voiceMeta">Use 30-90 seconds of clean speech for best results later.</p>
-        </div>
-
-        <div class="panel">
+        <div class="panel text-panel">
           <div class="panel-header">
             <div>
               <p class="step-label">Step 2</p>
