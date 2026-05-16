@@ -28,6 +28,7 @@ let voiceObjectUrl;
 let voiceBlob;
 let voiceFilename = "voice-sample.webm";
 let narrationMode = "system";
+let activeJobPoll;
 
 function setStatus(message, ready = false) {
   statusText.textContent = message;
@@ -106,6 +107,7 @@ function deleteVoiceSample() {
   setPill(jobState, "Idle");
   progressFill.style.width = "0%";
   resultBox.innerHTML = "<p>No narration started yet.</p>";
+  stopJobPolling();
   updateGenerateState();
 }
 
@@ -208,10 +210,10 @@ generateButton.addEventListener("click", async () => {
   }
 
   setPill(jobState, "Running", "busy");
-  setStatus("Generating locally with XTTS");
-  resultBox.innerHTML = "<p>Sending text and voice sample to the local XTTS backend...</p>";
+  setStatus("Starting local XTTS job");
+  resultBox.innerHTML = "<p>Starting local XTTS generation...</p>";
   generateButton.disabled = true;
-  progressFill.style.width = "35%";
+  progressFill.style.width = "8%";
 
   const formData = new FormData();
   formData.append("language", "ru");
@@ -229,22 +231,83 @@ generateButton.addEventListener("click", async () => {
       throw new Error(payload.error || "Local generation failed");
     }
 
-    progressFill.style.width = "100%";
-    setPill(jobState, "Done", "good");
-    setStatus("Russian audio ready", true);
-    resultBox.innerHTML = `
-      <audio class="audio-player" controls src="${payload.audioUrl}"></audio>
-      <p><a href="${payload.audioUrl}" download>Download generated WAV</a></p>
-    `;
+    pollGenerationJob(payload.jobId, payload.estimateSeconds);
   } catch (error) {
     progressFill.style.width = "0%";
     setPill(jobState, "Needs setup");
     setStatus("Local XTTS setup required");
     resultBox.innerHTML = `<p>${error.message}</p>`;
-  } finally {
     generateButton.disabled = !(hasVoice && hasText);
   }
 });
+
+function pollGenerationJob(jobId, estimateSeconds = 60) {
+  stopJobPolling();
+  const startedAt = Date.now();
+
+  async function poll() {
+    try {
+      const response = await fetch(`/api/jobs/${jobId}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Could not read job status");
+      }
+
+      const progress = Math.max(0, Math.min(100, payload.progress || 0));
+      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      const remainingSeconds = Math.max(0, (payload.estimateSeconds || estimateSeconds) - elapsedSeconds);
+
+      progressFill.style.width = `${progress}%`;
+      setStatus(payload.message || "Generating locally");
+      resultBox.innerHTML = `<p>${payload.message || "Generating locally"} · elapsed ${formatDuration(elapsedSeconds)} · estimate ${formatDuration(remainingSeconds)} left</p>`;
+
+      if (payload.state === "done") {
+        stopJobPolling();
+        progressFill.style.width = "100%";
+        setPill(jobState, "Done", "good");
+        setStatus("Russian audio ready", true);
+        resultBox.innerHTML = `
+          <audio class="audio-player" controls src="${payload.audioUrl}"></audio>
+          <p><a href="${payload.audioUrl}" download>Download generated WAV</a></p>
+        `;
+        generateButton.disabled = !(hasVoice && hasText);
+        return;
+      }
+
+      if (payload.state === "error") {
+        throw new Error(payload.message || "Local generation failed");
+      }
+    } catch (error) {
+      stopJobPolling();
+      progressFill.style.width = "0%";
+      setPill(jobState, "Error");
+      setStatus("Local XTTS failed");
+      resultBox.innerHTML = `<p>${error.message}</p>`;
+      generateButton.disabled = !(hasVoice && hasText);
+    }
+  }
+
+  poll();
+  activeJobPoll = window.setInterval(poll, 2000);
+}
+
+function stopJobPolling() {
+  if (activeJobPoll) {
+    window.clearInterval(activeJobPoll);
+    activeJobPoll = undefined;
+  }
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
+}
 
 function playWithSystemVoice() {
   const text = bookText.value.trim();
