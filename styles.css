@@ -32,17 +32,21 @@ input {
 }
 
 .app-shell {
-  width: min(1180px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 24px));
   margin: 0 auto;
-  padding: 40px 0;
+  min-height: 100vh;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .hero {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 18px 0 28px;
+  gap: 18px;
+  padding: 0 0 12px;
+  flex: 0 0 auto;
 }
 
 .eyebrow,
@@ -62,9 +66,9 @@ p {
 }
 
 h1 {
-  margin-bottom: 10px;
-  font-size: clamp(2.4rem, 6vw, 5rem);
-  line-height: 0.95;
+  margin-bottom: 4px;
+  font-size: 2.15rem;
+  line-height: 1;
   letter-spacing: 0;
 }
 
@@ -78,8 +82,8 @@ h2 {
   max-width: 590px;
   margin-bottom: 0;
   color: var(--muted);
-  font-size: 1.05rem;
-  line-height: 1.55;
+  font-size: 0.95rem;
+  line-height: 1.35;
 }
 
 .status-panel {
@@ -108,33 +112,41 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.mode-panel {
-  grid-column: 1 / -1;
+  grid-template-columns: minmax(250px, 0.82fr) minmax(360px, 1.25fr) minmax(280px, 0.9fr);
+  gap: 12px;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  box-shadow: var(--shadow);
-  padding: 22px;
+  box-shadow: 0 10px 28px rgba(29, 37, 40, 0.07);
+  padding: 14px;
+  min-height: 0;
 }
 
+.setup-panel,
+.text-panel,
 .output-panel {
-  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-header {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.compact-block + .compact-block {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 .pill {
@@ -162,8 +174,8 @@ h2 {
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .segmented {
@@ -193,7 +205,7 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 6px;
   color: var(--muted);
   cursor: pointer;
@@ -210,10 +222,10 @@ h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 42px;
+  min-height: 36px;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 0 16px;
+  padding: 0 12px;
   cursor: pointer;
   font-weight: 700;
   transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
@@ -260,7 +272,7 @@ h2 {
 
 .narrow {
   width: max-content;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .file-button input {
@@ -279,13 +291,15 @@ h2 {
 .helper {
   margin-bottom: 0;
   color: var(--muted);
-  line-height: 1.5;
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 textarea {
   width: 100%;
-  min-height: 270px;
-  resize: vertical;
+  flex: 1 1 auto;
+  min-height: 0;
+  resize: none;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
@@ -301,14 +315,14 @@ textarea:focus {
 .metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .metrics div {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
+  padding: 10px;
   background: #fbfcfa;
 }
 
@@ -318,7 +332,7 @@ textarea:focus {
 }
 
 .metrics strong {
-  font-size: 1.35rem;
+  font-size: 1.1rem;
 }
 
 .metrics span {
@@ -328,7 +342,7 @@ textarea:focus {
 .progress-track {
   height: 10px;
   overflow: hidden;
-  margin: 16px 0;
+  margin: 12px 0;
   border-radius: 999px;
   background: #e8ebe6;
 }
@@ -341,10 +355,11 @@ textarea:focus {
 }
 
 .result {
-  min-height: 78px;
+  flex: 1 1 auto;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 16px;
+  padding: 12px;
   color: var(--muted);
   line-height: 1.5;
 }
@@ -353,7 +368,7 @@ textarea:focus {
   margin-bottom: 0;
 }
 
-@media (max-width: 780px) {
+@media (max-width: 900px) {
   .app-shell {
     width: min(100% - 24px, 1180px);
     padding: 22px 0;
@@ -373,5 +388,13 @@ textarea:focus {
   .panel {
     margin-bottom: 14px;
     padding: 18px;
+  }
+
+  textarea {
+    min-height: 270px;
+  }
+
+  .result {
+    min-height: 78px;
   }
 }
