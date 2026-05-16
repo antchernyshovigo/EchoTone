@@ -65,6 +65,12 @@ http://127.0.0.1:8081
 
 The UI can record a voice sample and send Russian text to the backend. If XTTS is not installed yet, generation will return a setup message instead of falling back to a fake/system voice.
 
+## Local Voice Library
+
+Saved voice profiles live only on this machine. The server stores the manifest in `data/voices/manifest.json` and keeps the original audio samples in `data/voices/`; that folder is ignored by git.
+
+In the UI, record or upload a sample, give it a name, and press **Save**. After that you can choose the profile from the saved voices dropdown instead of uploading the same sample again. The **Delete** button removes the selected saved profile and its local audio file.
+
 ## Optional XTTS Setup
 
 XTTS-v2 is not vendored into this repo because the model runtime and weights are large. Install it locally when you are ready to generate cloned Russian audio:
