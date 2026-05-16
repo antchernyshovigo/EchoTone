@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import sys
 import uuid
 from email.parser import BytesParser
@@ -17,7 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 OUTPUTS_DIR = DATA_DIR / "outputs"
+CACHE_DIR = DATA_DIR / "cache"
 MAX_UPLOAD_BYTES = 80 * 1024 * 1024
+
+os.environ.setdefault("MPLCONFIGDIR", str(CACHE_DIR / "matplotlib"))
+os.environ.setdefault("XDG_CACHE_HOME", str(CACHE_DIR / "xdg"))
 
 
 class EchoToneHandler(SimpleHTTPRequestHandler):
