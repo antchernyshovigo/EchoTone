@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EchoTone</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Voice audiobook studio</p>
+          <h1 id="page-title">EchoTone</h1>
+          <p class="intro">
+            Upload a voice sample and book text, then prepare narration in your own voice.
+          </p>
+        </div>
+        <div class="status-panel" aria-live="polite">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Ready for input</span>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="EchoTone workflow">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="step-label">Step 1</p>
+              <h2>Voice sample</h2>
+            </div>
+            <span class="pill" id="voiceState">Missing</span>
+          </div>
+
+          <div class="controls">
+            <button class="button primary" id="recordButton" type="button">Start recording</button>
+            <label class="button secondary file-button">
+              Upload audio
+              <input id="voiceUpload" type="file" accept="audio/*">
+            </label>
+          </div>
+
+          <audio class="audio-player" id="voicePreview" controls hidden></audio>
+          <p class="helper" id="voiceMeta">Use 30-90 seconds of clean speech for best results later.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="step-label">Step 2</p>
+              <h2>Book text</h2>
+            </div>
+            <span class="pill" id="textState">Empty</span>
+          </div>
+
+          <label class="button secondary file-button narrow">
+            Upload .txt
+            <input id="textUpload" type="file" accept=".txt,text/plain">
+          </label>
+
+          <textarea id="bookText" rows="12" placeholder="Paste the text you want to narrate..."></textarea>
+
+          <div class="metrics">
+            <div>
+              <strong id="wordCount">0</strong>
+              <span>words</span>
+            </div>
+            <div>
+              <strong id="durationEstimate">0 min</strong>
+              <span>estimate</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel output-panel">
+          <div class="panel-header">
+            <div>
+              <p class="step-label">Step 3</p>
+              <h2>Generate audio</h2>
+            </div>
+            <span class="pill" id="jobState">Idle</span>
+          </div>
+
+          <button class="button primary wide" id="generateButton" type="button" disabled>
+            Generate preview
+          </button>
+
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+
+          <div class="result" id="resultBox">
+            <p>No audio generated yet.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
