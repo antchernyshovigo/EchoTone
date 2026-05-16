@@ -1,4 +1,5 @@
 const recordButton = document.querySelector("#recordButton");
+const deleteVoiceButton = document.querySelector("#deleteVoiceButton");
 const voiceUpload = document.querySelector("#voiceUpload");
 const voicePreview = document.querySelector("#voicePreview");
 const voiceState = document.querySelector("#voiceState");
@@ -20,6 +21,7 @@ let chunks = [];
 let hasVoice = false;
 let hasText = false;
 let isRecording = false;
+let voiceObjectUrl;
 
 function setStatus(message, ready = false) {
   statusText.textContent = message;
@@ -35,6 +37,10 @@ function updateGenerateState() {
   generateButton.disabled = !(hasVoice && hasText);
   if (hasVoice && hasText) {
     setStatus("Ready to generate", true);
+  } else if (!hasVoice) {
+    setStatus("Add a voice sample");
+  } else {
+    setStatus("Add book text");
   }
 }
 
@@ -51,12 +57,44 @@ function updateTextMetrics() {
 }
 
 function loadVoiceBlob(blob, label) {
+  if (voiceObjectUrl) {
+    URL.revokeObjectURL(voiceObjectUrl);
+  }
+
   const url = URL.createObjectURL(blob);
+  voiceObjectUrl = url;
   voicePreview.src = url;
   voicePreview.hidden = false;
   hasVoice = true;
+  deleteVoiceButton.hidden = false;
   setPill(voiceState, "Loaded", "good");
   voiceMeta.textContent = label;
+  updateGenerateState();
+}
+
+function deleteVoiceSample() {
+  if (isRecording && recorder?.state === "recording") {
+    recorder.stop();
+    isRecording = false;
+    recordButton.textContent = "Start recording";
+  }
+
+  if (voiceObjectUrl) {
+    URL.revokeObjectURL(voiceObjectUrl);
+    voiceObjectUrl = undefined;
+  }
+
+  voicePreview.removeAttribute("src");
+  voicePreview.load();
+  voicePreview.hidden = true;
+  voiceUpload.value = "";
+  hasVoice = false;
+  deleteVoiceButton.hidden = true;
+  setPill(voiceState, "Missing");
+  voiceMeta.textContent = "Use 30-90 seconds of clean speech for best results later.";
+  setPill(jobState, "Idle");
+  progressFill.style.width = "0%";
+  resultBox.innerHTML = "<p>No audio generated yet.</p>";
   updateGenerateState();
 }
 
@@ -115,6 +153,8 @@ voiceUpload.addEventListener("change", () => {
 
   loadVoiceBlob(file, `${file.name} selected.`);
 });
+
+deleteVoiceButton.addEventListener("click", deleteVoiceSample);
 
 textUpload.addEventListener("change", async () => {
   const file = textUpload.files?.[0];
