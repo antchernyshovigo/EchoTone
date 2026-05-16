@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -40,11 +42,7 @@ def generate_russian_voice_clone(
     if not speaker_wav.exists():
         raise TtsEngineError("Voice sample file was not saved.")
 
-    if speaker_wav.suffix.lower() not in {".wav", ".mp3", ".flac", ".m4a"}:
-        raise TtsEngineError(
-            "XTTS needs a standard audio file for the speaker sample. Upload a clean `.wav` sample "
-            "or convert the browser recording from `.webm` to `.wav` before generation."
-        )
+    speaker_wav = ensure_supported_speaker_sample(speaker_wav)
 
     output_wav.parent.mkdir(parents=True, exist_ok=True)
 
@@ -58,3 +56,38 @@ def generate_russian_voice_clone(
 
     if not output_wav.exists():
         raise TtsEngineError("XTTS finished without creating an output file.")
+
+
+def ensure_supported_speaker_sample(speaker_path: Path):
+    if speaker_path.suffix.lower() in {".wav", ".mp3", ".flac", ".m4a"}:
+        return speaker_path
+
+    if speaker_path.suffix.lower() not in {".webm", ".ogg"}:
+        raise TtsEngineError(
+            "XTTS needs a standard audio file for the speaker sample. Upload `.wav`, `.mp3`, `.flac`, "
+            "or record in the browser so EchoTone can convert it locally."
+        )
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise TtsEngineError(
+            "Browser recordings need conversion before XTTS. Install `ffmpeg` or upload a clean `.wav` sample."
+        )
+
+    converted_path = speaker_path.with_suffix(".wav")
+    command = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(speaker_path),
+        "-ac",
+        "1",
+        "-ar",
+        "24000",
+        str(converted_path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0 or not converted_path.exists():
+        raise TtsEngineError(f"Could not convert browser recording to WAV: {result.stderr.strip()}")
+
+    return converted_path
